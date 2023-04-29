@@ -80,10 +80,10 @@ class MainActivity : AppCompatActivity() {
     private class MyHandler(private val outerClass: WeakReference<MainActivity>) : Handler() {
         override fun handleMessage(msg: Message) {
             super.handleMessage(msg)
-            when {
-                msg.what == PING -> outerClass.get()?.updateText()
-                msg.what == STOP -> outerClass.get()?.togglePing(false)
-                msg.what == START -> outerClass.get()?.togglePing(true)
+            when (msg.what) {
+                PING -> outerClass.get()?.updateText()
+                STOP -> outerClass.get()?.togglePing(false)
+                START -> outerClass.get()?.togglePing(true)
             }
         }
     }
