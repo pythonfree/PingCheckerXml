@@ -67,10 +67,26 @@ class MainActivity : AppCompatActivity() {
         builder.setView(dialogLayout)
         builder.setPositiveButton("OK") {
                 _, _ ->
-            params.server = serverText.text.toString()
-            params.size = sizeText.text.toString().toInt()
-            params.interval = intervalText.text.toString().toDouble()
-            params.count = countText.text.toString().toInt()
+            params.server = try {
+                serverText.text.toString()
+            } catch (e: Exception) {
+                "8.8.8.8"
+            }
+            params.size = try {
+                sizeText.text.toString().toInt()
+            } catch (e: Exception) {
+                16
+            }
+            params.interval = try {
+                intervalText.text.toString().toDouble()
+            } catch (e: Exception) {
+                1.0
+            }
+            params.count = try {
+                countText.text.toString().toInt()
+            } catch (e: Exception) {
+                5
+            }
 
             syncServerText()
         }
