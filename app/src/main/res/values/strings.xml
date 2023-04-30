@@ -16,4 +16,6 @@
     <string name="error_uncaught">Uncaught exception</string>
     <string name="datetime_format">HH:mm:ss.SSS</string>
     <string name="clear">Clear</string>
+    <string name="label_rttAlarmValue">RttAlarmValue</string>
+    <string name="count_0_infinity">Count (0 - Infinity)</string>
 </resources>

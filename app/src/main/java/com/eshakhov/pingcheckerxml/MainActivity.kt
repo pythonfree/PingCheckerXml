@@ -1,15 +1,19 @@
 package com.eshakhov.pingcheckerxml
 
+import android.graphics.Color
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
 import android.os.Handler
 import android.os.Message
+import android.util.Log
+import android.view.View
 import android.widget.EditText
 import android.widget.TableRow
 import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import com.eshakhov.pingcheckerxml.databinding.ActivityMainBinding
+import java.io.IOException
 //import kotlinx.android.synthetic.main.activity_main.*
 import java.lang.ref.WeakReference
 import java.text.SimpleDateFormat
@@ -19,12 +23,14 @@ import java.util.Locale
 import java.util.Queue
 import java.util.regex.Matcher
 import java.util.regex.Pattern
+import kotlin.math.roundToInt
 import kotlin.math.roundToLong
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
 
-    private val pingRegex = "(?:\\[(?<ts>[0-9.]+)] )?(?<size>[0-9]+) bytes from (?<ip>[0-9.]+): icmp_seq=(?<seq>[0-9]+) ttl=(?<ttl>[0-9]+)(?: time=(?<rtt>[0-9.]+) (?<rttmetric>\\w+))?"
+    private val pingRegex =
+        "(?:\\[(?<ts>[0-9.]+)] )?(?<size>[0-9]+) bytes from (?<ip>[0-9.]+): icmp_seq=(?<seq>[0-9]+) ttl=(?<ttl>[0-9]+)(?: time=(?<rtt>[0-9.]+) (?<rttmetric>\\w+))?"
     private val outerClass = WeakReference<MainActivity>(this)
     private var mHandlerThread = MyHandler(outerClass)
 
@@ -45,6 +51,7 @@ class MainActivity : AppCompatActivity() {
         var size = 16
         var interval = 1.0
         var count = 5
+        var rttAlarmValue = 50
     }
 
     private var params = Params
@@ -54,19 +61,20 @@ class MainActivity : AppCompatActivity() {
         val inflater = layoutInflater
         val dialogLayout = inflater.inflate(R.layout.alert_dialog_settings, null)
 
-        val serverText  = dialogLayout.findViewById<EditText>(R.id.addressText)
-        val sizeText  = dialogLayout.findViewById<EditText>(R.id.sizeText)
-        val intervalText  = dialogLayout.findViewById<EditText>(R.id.intervalText)
-        val countText  = dialogLayout.findViewById<EditText>(R.id.countText)
+        val serverText = dialogLayout.findViewById<EditText>(R.id.addressText)
+        val sizeText = dialogLayout.findViewById<EditText>(R.id.sizeText)
+        val intervalText = dialogLayout.findViewById<EditText>(R.id.intervalText)
+        val countText = dialogLayout.findViewById<EditText>(R.id.countText)
+        val rttAlarmValue = dialogLayout.findViewById<EditText>(R.id.rttAlarmValue)
 
         serverText.setText(params.server)
         sizeText.setText(params.size.toString())
         intervalText.setText(params.interval.toString())
         countText.setText(params.count.toString())
+        rttAlarmValue.setText(params.rttAlarmValue.toString())
 
         builder.setView(dialogLayout)
-        builder.setPositiveButton("OK") {
-                _, _ ->
+        builder.setPositiveButton("OK") { _, _ ->
             params.server = try {
                 serverText.text.toString()
             } catch (e: Exception) {
@@ -86,6 +94,11 @@ class MainActivity : AppCompatActivity() {
                 countText.text.toString().toInt()
             } catch (e: Exception) {
                 5
+            }
+            params.rttAlarmValue = try {
+                rttAlarmValue.text.toString().toInt()
+            } catch (e: Exception) {
+                50
             }
 
             syncServerText()
@@ -107,7 +120,8 @@ class MainActivity : AppCompatActivity() {
     private fun parsePingString(s: String): Matcher {
         val re = Pattern.compile(
             pingRegex,
-            Pattern.CASE_INSENSITIVE.or(Pattern.DOTALL))
+            Pattern.CASE_INSENSITIVE.or(Pattern.DOTALL)
+        )
         return re.matcher(s)
 
     }
@@ -136,14 +150,14 @@ class MainActivity : AppCompatActivity() {
         var dateTimeStr = res.group(1)
         try {
             val sdf = SimpleDateFormat(getString(R.string.datetime_format), Locale.US)
-            val netDate = Date((dateTimeStr.toDouble()*1000).roundToLong())
+            val netDate = Date((dateTimeStr.toDouble() * 1000).roundToLong())
             dateTimeStr = sdf.format(netDate)
         } finally {
             tvTimestamp?.text = dateTimeStr
         }
 
         tvSize?.text = res.group(2)
-        tvTarget?.text =res.group(3)
+        tvTarget?.text = res.group(3)
         tvSeqN?.text = res.group(4)
         tvTtl?.text = res.group(5)
 
@@ -152,11 +166,17 @@ class MainActivity : AppCompatActivity() {
         else resources.getString(R.string.value_na)
 
         tvRtt?.text = rttConcat
+        val endIndex = rttConcat.indexOf(".") + 2
+        val rtt = rttConcat.substring(0, endIndex).toDouble().roundToInt()
+        if (rtt > params.rttAlarmValue) {
+            tvRtt?.setTextColor(Color.RED)
+        }
         binding.tableLayout.addView(rowView, 1)
     }
 
     internal inner class PingProcess : Runnable {
         override fun run() {
+
             val cmd = mutableListOf("ping", "-D")
             if (params.size > 0) {
                 cmd.addAll(arrayOf("-s", params.size.toString()))
@@ -195,12 +215,8 @@ class MainActivity : AppCompatActivity() {
                 mHandlerThread.sendMessage(messagePing)
             }
             if (isThreadRunning) {
-                errorMessage = try {
-                    process.errorStream.bufferedReader().readLine()
-                } catch (e: IllegalStateException) {
-                    "IllegalStateException"
-                } catch (e: NullPointerException) {
-                    "NullPointerException"
+                if (process.errorStream.bufferedReader().ready()) {
+                    errorMessage = process.errorStream.bufferedReader().read().toString()
                 }
             }
 
@@ -213,9 +229,9 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun togglePing(on: Boolean) {
-        if (errorMessage != "") {
-            Toast.makeText(this, errorMessage, Toast.LENGTH_SHORT).show()
-        }
+//        if (errorMessage != "") {
+//            Toast.makeText(this, "Error PING! Maybe wrong params?", Toast.LENGTH_LONG).show()
+//        }
 
         if (on) {
             binding.pingButton.text = resources.getString(R.string.btn_stop)
